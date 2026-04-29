@@ -191,13 +191,12 @@ if st.session_state.results:
             "-------------------\n\n"
         )
 
+    st.download_button(
+        label="対話ログをダウンロード",
 
-st.download_button(
-    label="対話ログをダウンロード",
+        data=conversation_text,
 
-    data=conversation_text,
+        file_name="ai_discussion.txt",
 
-    file_name="ai_discussion.txt",
-
-    mime="text/plain"
-)
+        mime="text/plain"
+    )
