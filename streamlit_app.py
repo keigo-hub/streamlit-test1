@@ -1,5 +1,12 @@
 import streamlit as st
 
+# 初期化
+if "running" not in st.session_state:
+    st.session_state.running = False
+
+if "results" not in st.session_state:
+    st.session_state.results = []
+
 # -----------------------------
 # CSS
 # -----------------------------
@@ -41,7 +48,7 @@ openai_client = OpenAI()
 gemini_client = genai.Client()
 
 # タイトル文字
-st.title("GPTとGeminiでの対話デモ")
+st.title("GPTとGeminiでの対話")
 
 # 説明
 st.write("""
@@ -63,57 +70,76 @@ phase_count = st.slider(
 # インプットテキスト
 theme = st.text_input("初めの提案テーマを入力してください。（例：地元でとれる甘いにんじんを題材にした、企画を提案）")
 
-if st.button("開始"):
+# ボタン制御用
+button_clicked = st.button(
+    "開始",
+    disabled=st.session_state.running
+)
 
-    # 対話履歴
-    phase_results = []
+if button_clicked:
+    st.session_state.running = True
+    st.rerun()
 
-    current_input = theme
+if st.session_state.running:
 
-    for phase in range(1, phase_count + 1):
+    with st.spinner("AIたちが議論中..."):
 
-        # GPT
-        gpt_res = openai_client.responses.create(
-            model="gpt-5.4",
-            instructions="地方のイベント企画を考案する役割です。",
-            input=current_input
-        )
+        # 対話履歴
+        phase_results = []
 
-        gpt_text = gpt_res.output_text
+        current_input = theme
 
-        # DEBUG
-        # with st.expander("GPT Raw Response"):
-        #     st.code(repr(gpt_text))
+        for phase in range(1, phase_count + 1):
 
-        # Gemini
-        gemini_res = gemini_client.models.generate_content(
-            model="gemini-3-flash-preview",
-            config=types.GenerateContentConfig(
-                system_instruction="あなたは厳格なイベントレビュー担当です。企画の弱点を指摘する。集客性を評価する。"),
-            contents=gpt_text
-        )
+            # GPT
+            gpt_res = openai_client.responses.create(
+                model="gpt-5.4",
+                instructions="地方のイベント企画を考案する役割です。",
+                input=current_input
+            )
 
-        gemini_text = gemini_res.text
+            gpt_text = gpt_res.output_text
 
-        # DEBUG
-        # with st.expander("Gemini Raw Response"):
-        #     st.code(repr(gemini_text))
+            # DEBUG
+            # with st.expander("GPT Raw Response"):
+            #     st.code(repr(gpt_text))
 
-        phase_results.append({
-            "phase": phase,
-            "gpt": gpt_text,
-            "gemini": gemini_text
-        })
+            # Gemini
+            gemini_res = gemini_client.models.generate_content(
+                model="gemini-3-flash-preview",
+                config=types.GenerateContentConfig(
+                    system_instruction="あなたは厳格なイベントレビュー担当です。企画の弱点を指摘する。集客性を評価する。"),
+                contents=gpt_text
+            )
 
-        # 次フェーズ入力
-        current_input = gemini_text
+            gemini_text = gemini_res.text
+
+            # DEBUG
+            # with st.expander("Gemini Raw Response"):
+            #     st.code(repr(gemini_text))
+
+            phase_results.append({
+                "phase": phase,
+                "gpt": gpt_text,
+                "gemini": gemini_text
+            })
+
+            # 次フェーズ入力
+            current_input = gemini_text
 
 
+    st.session_state.results = phase_results
+    st.session_state.running = False
+    st.rerun()
+
+
+conversation_text = ""
+if st.session_state.results:
     # -----------------------------
     # 表示
     # -----------------------------
 
-    for item in phase_results:
+    for item in st.session_state.results:
 
         st.markdown(
             f"<div class='phase-title'>Phase {item['phase']}</div>",
@@ -145,4 +171,33 @@ if st.button("開始"):
             {gemini_html}
             """, unsafe_allow_html=True)
 
+    for item in st.session_state.results:
 
+        conversation_text += (
+            f"Phase {item['phase']}\n"
+        )
+
+        conversation_text += (
+            f"[ChatGPT]\n"
+            f"{item['gpt']}\n\n"
+        )
+
+        conversation_text += (
+            f"[Gemini]\n"
+            f"{item['gemini']}\n\n"
+        )
+
+        conversation_text += (
+            "-------------------\n\n"
+        )
+
+
+st.download_button(
+    label="対話ログをダウンロード",
+
+    data=conversation_text,
+
+    file_name="ai_discussion.txt",
+
+    mime="text/plain"
+)
